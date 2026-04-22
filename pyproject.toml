@@ -1,0 +1,142 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ---------------------------------------------------------------------------
+# Project metadata (replaces setup.py)
+# ---------------------------------------------------------------------------
+
+[project]
+name = "permyt"
+dynamic = ["version"]
+description = "User-controlled authorization protocol for service-to-service data access"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [
+    { name = "Leopard Labs Ltd", email = "support@permyt.io" },
+]
+keywords = [
+    "permyt",
+    "authorization",
+    "ai-agents",
+    "workflows",
+    "automation",
+    "oauth",
+    "privacy",
+    "jwt",
+    "api-client",
+    "security",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Security",
+    "Topic :: Internet :: WWW/HTTP",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
+dependencies = [
+    "requests>=2.31.0",
+    "joserfc>=1.0.0",
+    "cryptography>=41.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.7.0",
+    "pylint>=3.0.0",
+    "mypy>=1.5.0",
+    "types-requests>=2.31.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/LeopardLabsAi/permyt-api-python"
+"Bug Tracker" = "https://github.com/LeopardLabsAi/permyt-api-python/issues"
+Documentation = "https://docs.permyt.io"
+"Source Code" = "https://github.com/LeopardLabsAi/permyt-api-python"
+
+# ---------------------------------------------------------------------------
+# Setuptools (replaces setup.cfg [options])
+# ---------------------------------------------------------------------------
+
+[tool.setuptools.dynamic]
+version = { attr = "permyt.__version__" }
+
+[tool.setuptools.packages.find]
+exclude = ["tests*", "examples*", "docs*"]
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+
+# ---------------------------------------------------------------------------
+# Black
+# ---------------------------------------------------------------------------
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312", "py313"]
+
+# ---------------------------------------------------------------------------
+# Mypy (replaces setup.cfg [mypy])
+# ---------------------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+# Mixin classes reference methods/attributes from sibling mixins that are
+# only combined at the PermytClient level.
+[[tool.mypy.overrides]]
+module = "permyt.mixins.*"
+disable_error_code = ["attr-defined", "no-any-return"]
+
+# ---------------------------------------------------------------------------
+# Pytest (replaces setup.cfg [tool:pytest])
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+markers = ["code: tests that check code quality (black, flake8)"]
+addopts = [
+    "--verbose",
+    "--strict-markers",
+    "--cov=permyt",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+# ---------------------------------------------------------------------------
+# Coverage (replaces setup.cfg [coverage:*])
+# ---------------------------------------------------------------------------
+
+[tool.coverage.run]
+source = ["permyt"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
