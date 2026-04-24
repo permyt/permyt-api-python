@@ -340,3 +340,27 @@ class UpdateScopesResponse(TypedDict):
     created: int
     updated: int
     deleted: int
+
+
+# -----------------------------------------------------------------------------
+# Data structures for viewing available scopes (requester → PERMYT)
+# -----------------------------------------------------------------------------
+
+
+class ServiceScopes(TypedDict):
+    """
+    Scopes available from a single service connected to a user's profile.
+    """
+
+    service_name: str
+    service_description: str | None
+    scopes: list[ScopeDefinition]
+
+
+class ViewScopesResponse(TypedDict):
+    """
+    Response from PERMYT listing available scopes across all providers
+    connected to a user's profile.
+    """
+
+    scopes: list[ServiceScopes]
