@@ -15,6 +15,7 @@ from permyt.typing import (
     RequestStatus,
     ServiceCredential,
     ServiceCallEndpoint,
+    ViewScopesResponse,
 )
 
 __all__ = ("RequesterMixin",)
@@ -124,6 +125,31 @@ class RequesterMixin:  # pylint: disable=too-few-public-methods
             url=self.get_fullpath("request/token/redeem/"),
             action="token_redeem",
             data={"token": token, "user_id": user_id},
+            recipient_public_key=self.get_permyt_public_key(),
+        )
+
+    # -------------------------------------------------------------------------
+    # Scope discovery
+    # -------------------------------------------------------------------------
+
+    def view_scopes(self, user_id: str) -> ViewScopesResponse:
+        """
+        View available scopes across all providers connected to a user's profile.
+
+        Returns scopes grouped by service, each with name, description, and
+        required inputs. Use this to understand what data is available before
+        making a request with ``request_access()``.
+
+        Args:
+            user_id (str): The user's connection ID (from the connect flow).
+
+        Returns:
+            ViewScopesResponse: Services and their scopes available to the user.
+        """
+        return self.request(
+            url=self.get_fullpath("request/scopes/view/"),
+            action="view_scopes",
+            data={"user_id": user_id},
             recipient_public_key=self.get_permyt_public_key(),
         )
 
