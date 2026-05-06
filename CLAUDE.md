@@ -72,6 +72,7 @@ process_request(metadata, data) -> dict  # MUST enforce force inputs in metadata
 **Connect capability additionally requires:**
 ```python
 process_user_connect(data: ConnectRequest) -> dict
+process_user_disconnect(data: DisconnectRequest) -> dict  # idempotent local cleanup
 ```
 
 ### Security Model (SDK-specific)
@@ -137,6 +138,34 @@ Links a Service to a User Profile via QR code. Creates the `ServiceConnection` a
     │                            │                          │                              │
     │                            │  7. Return service response                             │
     │                            │◄─────────────────────────│                              │
+```
+
+### Disconnect Cycle
+
+When a user revokes a previously-linked service from their PERMYT app, the broker tears down its own state and notifies the service so it can drop OAuth tokens, sessions, or whatever local link the connect flow established. The service response is best-effort — the broker does not block on it.
+
+```
+  Mobile App                     Broker                          Service
+      │                            │                                │
+      │  1. POST /profiles/{id}/services/{service_id}/disconnect/   │
+      │───────────────────────────►│                                │
+      │                            │                                │
+      │              2. Reject AWAITING requests + REJECTED callback │
+      │                 Emit per-grant REVOKED audit logs            │
+      │                            │                                │
+      │                            │  3. Inbound: action=user_disconnect
+      │                            │  {permyt_user_id}              │
+      │                            │───────────────────────────────►│
+      │                            │                                │
+      │                            │            4. process_user_disconnect()
+      │                            │               Revoke local credentials
+      │                            │               Unlink permyt_user_id
+      │                            │◄───────────────────────────────│
+      │                            │                                │
+      │              5. connection.delete() → DISCONNECTED audit log │
+      │                                                              │
+      │  6. 200 OK                                                   │
+      │◄───────────────────────────│                                │
 ```
 
 ### Request Access Cycle
@@ -258,7 +287,8 @@ All service-to-Broker and Broker-to-service communication uses **ES256 signing**
 - **`ServiceCallRequest`**: `{token, payload: ServiceCallPayload, proof}` — complete requester-to-provider request
 - **`ServiceCallEndpoint`**: `{url, description?, input_fields?}`
 - **`ConnectPayload`**: `{service_id, payload: EncryptedPayload, proof}` — connect flow payload (QR/NFC/button)
-- **`ConnectRequest`**: `{token, user_id}` — connect callback from PERMYT to service
+- **`ConnectRequest`**: `{token, permyt_user_id}` — connect callback from PERMYT to service
+- **`DisconnectRequest`**: `{permyt_user_id}` — disconnect callback from PERMYT to service
 - **`ConsentMode`**: `Literal["auto_grant", "prompt_once", "prompt_always"]` — consent mode for scopes
 - **`ScopeInput`**: `{name, description}` — input field declaration for a scope
 - **`ScopeDefinition`**: `{reference, name, description?, inputs?, default_consent_mode?, high_sensitivity?}` — scope definition for `update_scopes()`
@@ -270,6 +300,7 @@ This SDK provides the cryptographic and protocol layer for both Requesters and P
 
 - **Inbound dispatcher**: `InboundMixin` implements `handle_inbound()` — single-endpoint dispatcher that routes by `action` field to the right handler
 - **Connect cycle**: `UserConnectMixin` implements `generate_connect_token()` (step 1) and `handle_user_connect()` / `process_user_connect()` (step 6)
+- **Disconnect cycle**: `UserDisconnectMixin` implements `handle_user_disconnect()` / `process_user_disconnect()` — fired by the broker when a user revokes a connection from their PERMYT app. Implementors should drop OAuth tokens, sessions, and any local link keyed by `permyt_user_id`. Idempotent.
 - **Request cycle (Requester)**: `RequesterMixin` implements `request_access()` (step 1), `check_access()` (step 8), `handle_approved_access()` (step 8), `call_services()` (step 9), `handle_request_status()` / `process_request_status()` (status callbacks), `request_token()` / `redeem_token()` (exchange tokens)
 - **Request cycle (Provider)**: `ProviderMixin` implements `handle_token_request()` (step 7) and `handle_service_call()` (step 10)
 - **Scope management**: `ScopeManagementMixin` implements `update_scopes()` — pushes the complete scope list to PERMYT, which diffs by `reference` to create/update/delete
