@@ -1,6 +1,5 @@
-from typing import Any
-
 import logging
+from typing import Any
 
 from requests.exceptions import RequestException
 
@@ -13,8 +12,8 @@ from permyt.typing import (
     ExchangeToken,
     RedeemedToken,
     RequestStatus,
-    ServiceCredential,
     ServiceCallEndpoint,
+    ServiceCredential,
     ViewScopesResponse,
 )
 
@@ -226,9 +225,7 @@ class RequesterMixin:  # pylint: disable=too-few-public-methods
             logging.error(f"Unexpected error in handle_request_status: {exc}", exc_info=True)
             return self.handle_permyt_error(UnexpectedError(extra_info=str(exc)))
 
-    def process_request_status(
-        self, data: RequestStatus
-    ) -> dict[str, Any] | None:  # pylint: disable=unused-argument
+    def process_request_status(self, data: RequestStatus) -> dict[str, Any] | None:  # pylint: disable=unused-argument
         """
         Hook for services to react to access-request status changes pushed by PERMYT.
 

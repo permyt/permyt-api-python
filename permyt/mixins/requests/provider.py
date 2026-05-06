@@ -1,15 +1,14 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any
-
 import logging
 import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from permyt.exceptions import PermytError, UnexpectedError
 from permyt.typing import (
     EncryptedRequest,
     ScopeGrant,
-    ServiceCallRequest,
     ServiceCallEndpoint,
+    ServiceCallRequest,
     TokenMetadata,
     TokenRequestData,
 )

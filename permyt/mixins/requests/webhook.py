@@ -1,6 +1,5 @@
-from typing import Any
-
 import logging
+from typing import Any
 
 from permyt.exceptions import InvalidPayloadError, PermytError, UnexpectedError
 

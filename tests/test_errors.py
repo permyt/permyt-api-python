@@ -3,20 +3,20 @@
 import pytest
 
 from permyt.exceptions import (
-    PermytError,
-    UnexpectedError,
-    SecurityError,
-    InvalidTokenError,
-    TokenExpiredError,
-    TokenAlreadyUsedError,
-    InvalidScopeError,
-    InvalidUserError,
-    InvalidPublicKeyError,
-    InvalidProofError,
-    InvalidPayloadError,
     ExpiredRequestError,
     InvalidInputError,
+    InvalidPayloadError,
+    InvalidProofError,
+    InvalidPublicKeyError,
+    InvalidScopeError,
+    InvalidTokenError,
+    InvalidUserError,
+    PermytError,
+    SecurityError,
+    TokenAlreadyUsedError,
+    TokenExpiredError,
     TransportError,
+    UnexpectedError,
 )
 
 ALL_EXCEPTIONS = [

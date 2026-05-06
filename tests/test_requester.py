@@ -1,15 +1,10 @@
 """Tests for RequesterMixin methods."""
 
 from datetime import datetime, timezone
-from typing import Any
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from permyt.exceptions import (
-    InvalidProofError,
     TransportError,
-    UnexpectedError,
 )
 from tests.conftest import StubPermytClient, _generate_ec_keypair
 

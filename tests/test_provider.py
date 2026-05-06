@@ -1,11 +1,8 @@
 """Tests for ProviderMixin methods."""
 
 from datetime import datetime, timezone
-from typing import Any
 
-import pytest
-
-from permyt.exceptions import InvalidUserError, InvalidProofError
+from permyt.exceptions import InvalidUserError
 from tests.conftest import StubPermytClient, _generate_ec_keypair
 
 # ---------------------------------------------------------------------------

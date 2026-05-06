@@ -53,8 +53,7 @@ dependencies = [
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
-    "black>=23.7.0",
-    "pylint>=3.0.0",
+    "ruff>=0.6.0",
     "mypy>=1.5.0",
     "types-requests>=2.31.0",
 ]
@@ -80,12 +79,36 @@ zip-safe = false
 include-package-data = true
 
 # ---------------------------------------------------------------------------
-# Black
+# Ruff (lint + format)
 # ---------------------------------------------------------------------------
 
-[tool.black]
+[tool.ruff]
 line-length = 100
-target-version = ["py310", "py311", "py312", "py313"]
+target-version = "py310"
+extend-exclude = [".history", "env", ".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "S", "PT", "RET", "SIM", "TID", "PL"]
+ignore = [
+    "S101",      # assert is fine in tests
+    "PLR0913",   # too many args — common in protocol/SDK signatures
+    "PLR0915",   # too many statements
+    "PLR0912",   # too many branches
+    "PLR2004",   # magic-value-comparison
+    "PLC0415",   # late imports — used to break circular deps in mixins
+    "RET504",    # unnecessary assignment before return is a readability call
+    "RET503",    # explicit None return from conditionals is a style call
+    "TID252",    # relative imports are the SDK convention inside the package
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PLR", "PT011", "PT006"]
+"conftest.py" = ["S"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
 
 # ---------------------------------------------------------------------------
 # Mypy (replaces setup.cfg [mypy])
@@ -113,7 +136,7 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-markers = ["code: tests that check code quality (black, flake8)"]
+markers = ["code: tests that check code quality (ruff)"]
 addopts = [
     "--verbose",
     "--strict-markers",

@@ -16,16 +16,16 @@ pip install -e ".[dev]"
 pytest
 
 # Format code
-black permyt/
+ruff format permyt/ tests/
 
 # Lint
-pylint permyt/
+ruff check permyt/ tests/
 
 # Type check
 mypy permyt/
 ```
 
-Code style: **100-character line length** (enforced by black and flake8).
+Code style: **100-character line length** (enforced by ruff).
 
 ## Architecture
 

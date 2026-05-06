@@ -5,8 +5,7 @@ Uses real cryptographic operations with mocked HTTP to PERMYT.
 """
 
 from datetime import datetime, timezone
-from typing import Any
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from tests.conftest import StubPermytClient, _generate_ec_keypair
 
