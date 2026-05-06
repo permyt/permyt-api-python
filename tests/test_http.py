@@ -39,56 +39,66 @@ def test_request_returns_json_on_success(client):
 
 
 def test_request_raises_transport_error_on_404(client):
-    with patch(
-        "permyt.mixins.http.requests.post",
-        return_value=_mock_response(404, '{"detail": "nope"}', json_data={"detail": "nope"}),
+    with (
+        patch(
+            "permyt.mixins.http.requests.post",
+            return_value=_mock_response(404, '{"detail": "nope"}', json_data={"detail": "nope"}),
+        ),
+        pytest.raises(TransportError) as exc_info,
     ):
-        with pytest.raises(TransportError) as exc_info:
-            _call(client)
+        _call(client)
     assert exc_info.value.status_code == 404
     assert exc_info.value.code == "transport_error"
     assert "nope" in exc_info.value.extra_info
 
 
 def test_request_raises_transport_error_on_500_html(client):
-    with patch(
-        "permyt.mixins.http.requests.post",
-        return_value=_mock_response(500, "<html>Server Error</html>"),
+    with (
+        patch(
+            "permyt.mixins.http.requests.post",
+            return_value=_mock_response(500, "<html>Server Error</html>"),
+        ),
+        pytest.raises(TransportError) as exc_info,
     ):
-        with pytest.raises(TransportError) as exc_info:
-            _call(client)
+        _call(client)
     assert exc_info.value.status_code == 500
     assert "Server Error" in exc_info.value.extra_info
 
 
 def test_request_raises_transport_error_on_connection_error(client):
-    with patch(
-        "permyt.mixins.http.requests.post",
-        side_effect=requests_lib.ConnectionError("boom"),
+    with (
+        patch(
+            "permyt.mixins.http.requests.post",
+            side_effect=requests_lib.ConnectionError("boom"),
+        ),
+        pytest.raises(TransportError) as exc_info,
     ):
-        with pytest.raises(TransportError) as exc_info:
-            _call(client)
+        _call(client)
     assert exc_info.value.status_code is None
     assert "boom" in exc_info.value.extra_info
     assert "ConnectionError" in str(exc_info.value)
 
 
 def test_request_raises_transport_error_on_timeout(client):
-    with patch(
-        "permyt.mixins.http.requests.post",
-        side_effect=requests_lib.Timeout("slow"),
+    with (
+        patch(
+            "permyt.mixins.http.requests.post",
+            side_effect=requests_lib.Timeout("slow"),
+        ),
+        pytest.raises(TransportError) as exc_info,
     ):
-        with pytest.raises(TransportError) as exc_info:
-            _call(client)
+        _call(client)
     assert exc_info.value.status_code is None
     assert "Timeout" in str(exc_info.value)
 
 
 def test_request_raises_unexpected_on_non_json_2xx(client):
-    with patch(
-        "permyt.mixins.http.requests.post",
-        return_value=_mock_response(200, "<html/>"),
+    with (
+        patch(
+            "permyt.mixins.http.requests.post",
+            return_value=_mock_response(200, "<html/>"),
+        ),
+        pytest.raises(UnexpectedError) as exc_info,
     ):
-        with pytest.raises(UnexpectedError) as exc_info:
-            _call(client)
+        _call(client)
     assert "<html/>" in exc_info.value.extra_info

@@ -1,8 +1,7 @@
+import posixpath
+import secrets
 from datetime import datetime, timezone
 from typing import Any
-
-import secrets
-import posixpath
 
 import requests
 from requests.exceptions import RequestException

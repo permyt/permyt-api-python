@@ -9,19 +9,19 @@ def test_permyt_client_importable():
 
 def test_exceptions_importable():
     from permyt.exceptions import (
-        PermytError,
-        UnexpectedError,
-        SecurityError,
-        InvalidTokenError,
-        TokenExpiredError,
-        TokenAlreadyUsedError,
-        InvalidScopeError,
-        InvalidUserError,
-        InvalidPublicKeyError,
-        InvalidProofError,
-        InvalidPayloadError,
         ExpiredRequestError,
         InvalidInputError,
+        InvalidPayloadError,
+        InvalidProofError,
+        InvalidPublicKeyError,
+        InvalidScopeError,
+        InvalidTokenError,
+        InvalidUserError,
+        PermytError,
+        SecurityError,
+        TokenAlreadyUsedError,
+        TokenExpiredError,
+        UnexpectedError,
     )
 
     assert PermytError is not None
@@ -49,22 +49,8 @@ def test_exceptions_importable():
 def test_typing_importable():
     from permyt.typing import (
         AccessRequest,
-        AccessPayload,
-        AccessStatus,
-        AccessResponse,
-        ExchangeToken,
-        RedeemedToken,
-        TokenRequestData,
-        TokenMetadata,
-        EncryptedPayload,
-        EncryptedRequest,
-        RequestStatus,
-        ServiceCredential,
-        ServiceCallPayload,
-        ServiceCallRequest,
-        ServiceCallEndpoint,
-        ConnectPayload,
         ConnectRequest,
+        RequestStatus,
     )
 
     assert AccessRequest is not None
@@ -73,7 +59,7 @@ def test_typing_importable():
 
 
 def test_mixins_importable():
-    from permyt.mixins.requests import RequesterMixin, ProviderMixin, UserConnectMixin, InboundMixin
+    from permyt.mixins.requests import InboundMixin, ProviderMixin, RequesterMixin, UserConnectMixin
 
     assert RequesterMixin is not None
     assert ProviderMixin is not None

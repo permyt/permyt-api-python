@@ -1,16 +1,15 @@
+import hashlib
+import hmac
+import json
 from abc import abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import hashlib
-import hmac
-import json
-
-from joserfc import jwt, jwe
+from joserfc import jwe, jwt
 from joserfc.jwk import ECKey
 
-from permyt.exceptions import InvalidPublicKeyError, InvalidProofError, InvalidPayloadError
+from permyt.exceptions import InvalidPayloadError, InvalidProofError, InvalidPublicKeyError
 from permyt.typing import EncryptedRequest
 
 
@@ -53,7 +52,7 @@ class EncryptionMixin:  # pylint: disable=too-few-public-methods
             path = Path(private_key)
             if not path.exists():
                 raise ValueError(f"Private key file not found: {private_key}")
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 pem = f.read()
 
         if not pem.startswith("-----BEGIN"):

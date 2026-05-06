@@ -4,11 +4,11 @@ import pytest
 from joserfc import jwt
 from joserfc.jwk import ECKey
 
-from permyt.exceptions import InvalidProofError, InvalidPublicKeyError, InvalidPayloadError
+from permyt.exceptions import InvalidPayloadError, InvalidProofError, InvalidPublicKeyError
 from tests.conftest import StubPermytClient, _generate_ec_keypair
 
 
-@pytest.fixture()
+@pytest.fixture
 def client_and_keys(test_keys, permyt_keys):
     private_pem, public_pem = test_keys
     _, permyt_public_pem = permyt_keys

@@ -35,12 +35,12 @@ def _generate_ec_keypair() -> tuple[str, str]:
     return private_pem, public_pem
 
 
-@pytest.fixture()
+@pytest.fixture
 def test_keys():
     return _generate_ec_keypair()
 
 
-@pytest.fixture()
+@pytest.fixture
 def permyt_keys():
     return _generate_ec_keypair()
 
@@ -133,7 +133,7 @@ class StubPermytClient(PermytClient):
         return {"disconnected": True}
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(test_keys, permyt_keys):
     private_pem, _ = test_keys
     _, permyt_public_pem = permyt_keys
