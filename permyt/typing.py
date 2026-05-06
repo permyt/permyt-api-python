@@ -179,7 +179,7 @@ class EncryptedRequest(TypedDict, total=False):
     uses it when present.
     """
 
-    action: str  # one of: token_request, service_call, user_connect, request_status
+    action: str  # token_request, service_call, user_connect, user_disconnect, request_status
     payload: EncryptedPayload
     proof: str  # JWT signed by PERMYT's private key, proving payload authenticity
 
@@ -280,6 +280,18 @@ class ConnectRequest(TypedDict):
     """
 
     token: str  # Signed JWT issued by the service via generate_connect_token()
+    permyt_user_id: str  # The caller's PERMYT identity
+
+
+class DisconnectRequest(TypedDict):
+    """
+    Request from PERMYT to the service when a user disconnects this service
+    from their profile via the mobile app.
+
+    Carries the PERMYT user identity so the service can locate and revoke
+    any local credentials, sessions, or stored tokens linked to that user.
+    """
+
     permyt_user_id: str  # The caller's PERMYT identity
 
 

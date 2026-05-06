@@ -9,6 +9,7 @@ from .mixins.requests import (
     RequesterMixin,
     ScopeManagementMixin,
     UserConnectMixin,
+    UserDisconnectMixin,
 )
 
 __all__ = ("PermytClient",)
@@ -22,6 +23,7 @@ class PermytClient(
     RequesterMixin,
     ProviderMixin,
     UserConnectMixin,
+    UserDisconnectMixin,
     ScopeManagementMixin,
     InboundMixin,
 ):
@@ -50,7 +52,8 @@ class PermytClient(
         - process_request()             — handle validated request
 
     Connect capability (implement if supporting user linking):
-        - process_user_connect()        — handle user login/linking
+        - process_user_connect()         — handle user login/linking
+        - process_user_disconnect()      — handle user revoking the link
     """
 
     def __init__(self, host: str | None = None):

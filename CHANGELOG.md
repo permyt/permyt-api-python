@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-05-06
+
+### Added
+- `UserDisconnectMixin` with `handle_user_disconnect` and abstract
+  `process_user_disconnect`, mirroring the connect flow so providers can
+  drop OAuth tokens, sessions, and local links when a user revokes a
+  connection from their PERMYT app.
+- `DisconnectRequest` TypedDict for the new payload shape.
+- `handle_inbound` now routes `action="user_disconnect"` to the new handler.
+
 ## [0.1.2] - 2026-04-21
 
 ### Changed

@@ -58,6 +58,35 @@ def test_handle_inbound_dispatches_user_connect(test_keys, permyt_keys):
     assert result == {"connected": True}
 
 
+def test_handle_inbound_dispatches_user_disconnect(test_keys, permyt_keys):
+    service_private, service_public = test_keys
+    permyt_private, permyt_public = permyt_keys
+    service = StubPermytClient(private_key=service_private, permyt_public_key=permyt_public)
+    permyt = StubPermytClient(private_key=permyt_private, permyt_public_key=permyt_public)
+
+    envelope = _build_signed_envelope(permyt, service_public, {"permyt_user_id": "permyt-user-9"})
+    envelope["action"] = "user_disconnect"
+
+    result = service.handle_inbound(envelope)
+    assert result == {"disconnected": True}
+    assert service._disconnected_users == ["permyt-user-9"]
+
+
+def test_handle_inbound_user_disconnect_invalid_proof(test_keys, permyt_keys):
+    """Tampered proof must be rejected before reaching process_user_disconnect."""
+    service_private, service_public = test_keys
+    permyt_private, permyt_public = permyt_keys
+    service = StubPermytClient(private_key=service_private, permyt_public_key=permyt_public)
+    permyt = StubPermytClient(private_key=permyt_private, permyt_public_key=permyt_public)
+
+    envelope = _build_signed_envelope(permyt, service_public, {"permyt_user_id": "permyt-user-9"})
+    envelope["action"] = "user_disconnect"
+    envelope["proof"] = envelope["proof"][:-2] + ("aa" if envelope["proof"][-2:] != "aa" else "bb")
+
+    result = service.handle_inbound(envelope)
+    assert "error" in result
+
+
 def test_handle_inbound_dispatches_request_status(test_keys, permyt_keys):
     """Default process_request_status returns None → wrapper substitutes {received: True}."""
     service_private, service_public = test_keys

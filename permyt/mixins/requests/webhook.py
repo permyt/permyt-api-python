@@ -21,10 +21,11 @@ class InboundMixin:  # pylint: disable=too-few-public-methods
 
     Recognised actions:
 
-    - ``token_request``  — PERMYT asks the provider to issue a single-use token
-    - ``service_call``   — a requester calls a provider endpoint with a token
-    - ``user_connect``   — PERMYT forwards a scanned QR-code login
-    - ``request_status`` — PERMYT notifies a requester of an access-request status change
+    - ``token_request``    — PERMYT asks the provider to issue a single-use token
+    - ``service_call``     — a requester calls a provider endpoint with a token
+    - ``user_connect``     — PERMYT forwards a scanned QR-code login
+    - ``user_disconnect``  — PERMYT notifies the service that a user revoked the link
+    - ``request_status``   — PERMYT notifies a requester of an access-request status change
     """
 
     def handle_inbound(self, body: dict[str, Any]) -> dict[str, Any]:
@@ -46,16 +47,10 @@ class InboundMixin:  # pylint: disable=too-few-public-methods
                     extra_info="Missing 'action' field on inbound request body."
                 )
 
-            if action == "token_request":
-                return self.handle_token_request(body)
-            if action == "service_call":
-                return self.handle_service_call(body)
-            if action == "user_connect":
-                return self.handle_user_connect(body)
-            if action == "request_status":
-                return self.handle_request_status(body)
-
-            raise InvalidPayloadError(extra_info=f"Unknown action: {action!r}")
+            handler = self._inbound_handler(action)
+            if handler is None:
+                raise InvalidPayloadError(extra_info=f"Unknown action: {action!r}")
+            return handler(body)
 
         except PermytError as exc:
             return self.handle_permyt_error(exc)
@@ -63,3 +58,13 @@ class InboundMixin:  # pylint: disable=too-few-public-methods
         except Exception as exc:  # pylint: disable=broad-except
             logging.error(f"Unexpected error in handle_inbound: {exc}", exc_info=True)
             return self.handle_permyt_error(UnexpectedError(extra_info=str(exc)))
+
+    def _inbound_handler(self, action: str):
+        """Return the handler bound to ``action`` or ``None`` if unknown."""
+        return {
+            "token_request": self.handle_token_request,
+            "service_call": self.handle_service_call,
+            "user_connect": self.handle_user_connect,
+            "user_disconnect": self.handle_user_disconnect,
+            "request_status": self.handle_request_status,
+        }.get(action)
