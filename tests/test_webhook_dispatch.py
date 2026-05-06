@@ -64,9 +64,7 @@ def test_handle_inbound_dispatches_user_disconnect(test_keys, permyt_keys):
     service = StubPermytClient(private_key=service_private, permyt_public_key=permyt_public)
     permyt = StubPermytClient(private_key=permyt_private, permyt_public_key=permyt_public)
 
-    envelope = _build_signed_envelope(
-        permyt, service_public, {"permyt_user_id": "permyt-user-9"}
-    )
+    envelope = _build_signed_envelope(permyt, service_public, {"permyt_user_id": "permyt-user-9"})
     envelope["action"] = "user_disconnect"
 
     result = service.handle_inbound(envelope)
@@ -81,9 +79,7 @@ def test_handle_inbound_user_disconnect_invalid_proof(test_keys, permyt_keys):
     service = StubPermytClient(private_key=service_private, permyt_public_key=permyt_public)
     permyt = StubPermytClient(private_key=permyt_private, permyt_public_key=permyt_public)
 
-    envelope = _build_signed_envelope(
-        permyt, service_public, {"permyt_user_id": "permyt-user-9"}
-    )
+    envelope = _build_signed_envelope(permyt, service_public, {"permyt_user_id": "permyt-user-9"})
     envelope["action"] = "user_disconnect"
     envelope["proof"] = envelope["proof"][:-2] + ("aa" if envelope["proof"][-2:] != "aa" else "bb")
 
