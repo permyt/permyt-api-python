@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DisconnectRequest` TypedDict for the new payload shape.
 - `handle_inbound` now routes `action="user_disconnect"` to the new handler.
 
+## [0.1.3] - 2026-04-24
+
+### Added
+- `RequesterMixin.view_scopes(user_id)` — enumerate the providers and scopes
+  available to a connected user across their profile. Calls the broker's
+  `request/scopes/view/` endpoint and returns a `ViewScopesResponse`.
+- `ServiceScopes` and `ViewScopesResponse` TypedDicts.
+
 ## [0.1.2] - 2026-04-21
 
 ### Changed

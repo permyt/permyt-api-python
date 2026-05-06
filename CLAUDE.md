@@ -36,9 +36,11 @@ Code style: **100-character line length** (enforced by ruff).
 - [mixins/encryption.py](permyt/mixins/encryption.py) — ES256 JWT signing, JWE encryption/decryption (ECDH-ES+A256KW + A256GCM), proof-of-possession tokens
 - [mixins/http.py](permyt/mixins/http.py) — HTTP client with signed requests, nonce + ISO timestamp for replay attack prevention
 - [mixins/errors.py](permyt/mixins/errors.py) — Exception-to-HTTP-response conversion
-- [mixins/requests/requester.py](permyt/mixins/requests/requester.py) — Access requests, exchange token redeeming, calling providers
+- [mixins/requests/requester.py](permyt/mixins/requests/requester.py) — Access requests, exchange token redeeming, calling providers, scope discovery (`view_scopes`)
 - [mixins/requests/provider.py](permyt/mixins/requests/provider.py) — Token issuance, service call handling, token validation
 - [mixins/requests/connect.py](permyt/mixins/requests/connect.py) — connect payload generation (QR code, NFC, or button), user login/account linking flows
+- [mixins/requests/disconnect.py](permyt/mixins/requests/disconnect.py) — `UserDisconnectMixin`: handles the broker's `action="user_disconnect"` webhook so providers drop OAuth tokens / sessions when a user revokes the connection
+- [mixins/requests/scopes.py](permyt/mixins/requests/scopes.py) — `ScopeManagementMixin`: pushes the service's complete scope list to PERMYT via `update_scopes`
 - [mixins/requests/webhook.py](permyt/mixins/requests/webhook.py) — `InboundMixin`: single-endpoint dispatcher (`handle_inbound`) that routes by `action` field to the right handler
 
 ### Abstract Methods Pattern
@@ -293,6 +295,8 @@ All service-to-Broker and Broker-to-service communication uses **ES256 signing**
 - **`ScopeInput`**: `{name, description}` — input field declaration for a scope
 - **`ScopeDefinition`**: `{reference, name, description?, inputs?, default_consent_mode?, high_sensitivity?}` — scope definition for `update_scopes()`
 - **`UpdateScopesResponse`**: `{created, updated, deleted}` — response from scope update
+- **`ServiceScopes`**: `{service_name, service_description, scopes: list[ScopeDefinition]}` — one provider's exposed scopes inside a `view_scopes` response
+- **`ViewScopesResponse`**: `{scopes: list[ServiceScopes]}` — broker's response to `view_scopes(user_id)`
 
 ### This Project's Role: The SDK
 
@@ -301,7 +305,7 @@ This SDK provides the cryptographic and protocol layer for both Requesters and P
 - **Inbound dispatcher**: `InboundMixin` implements `handle_inbound()` — single-endpoint dispatcher that routes by `action` field to the right handler
 - **Connect cycle**: `UserConnectMixin` implements `generate_connect_token()` (step 1) and `handle_user_connect()` / `process_user_connect()` (step 6)
 - **Disconnect cycle**: `UserDisconnectMixin` implements `handle_user_disconnect()` / `process_user_disconnect()` — fired by the broker when a user revokes a connection from their PERMYT app. Implementors should drop OAuth tokens, sessions, and any local link keyed by `permyt_user_id`. Idempotent.
-- **Request cycle (Requester)**: `RequesterMixin` implements `request_access()` (step 1), `check_access()` (step 8), `handle_approved_access()` (step 8), `call_services()` (step 9), `handle_request_status()` / `process_request_status()` (status callbacks), `request_token()` / `redeem_token()` (exchange tokens)
+- **Request cycle (Requester)**: `RequesterMixin` implements `request_access()` (step 1), `check_access()` (step 8), `handle_approved_access()` (step 8), `call_services()` (step 9), `handle_request_status()` / `process_request_status()` (status callbacks), `request_token()` / `redeem_token()` (exchange tokens), `view_scopes()` (enumerate providers and their scopes available to a connected user)
 - **Request cycle (Provider)**: `ProviderMixin` implements `handle_token_request()` (step 7) and `handle_service_call()` (step 10)
 - **Scope management**: `ScopeManagementMixin` implements `update_scopes()` — pushes the complete scope list to PERMYT, which diffs by `reference` to create/update/delete
 - **All crypto**: `EncryptionMixin` handles ES256 signing, JWE encryption/decryption, proof-of-possession tokens
