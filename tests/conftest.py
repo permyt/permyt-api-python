@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives.serialization import (
 from permyt import PermytClient
 from permyt.typing import (
     ConnectRequest,
+    DisconnectRequest,
     ScopeGrant,
     ServiceCallEndpoint,
     TokenMetadata,
@@ -125,6 +126,11 @@ class StubPermytClient(PermytClient):
 
     def process_user_connect(self, data: ConnectRequest) -> dict[str, Any]:
         return {"connected": True}
+
+    def process_user_disconnect(self, data: DisconnectRequest) -> dict[str, Any]:
+        self._disconnected_users = getattr(self, "_disconnected_users", [])
+        self._disconnected_users.append(data["permyt_user_id"])
+        return {"disconnected": True}
 
 
 @pytest.fixture()
