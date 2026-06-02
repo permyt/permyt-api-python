@@ -36,11 +36,14 @@ A service can be a requester, a provider, or both. Any service can additionally 
   - [Building a Requester](#building-a-requester)
   - [Building a Provider](#building-a-provider)
   - [Connecting Users](#connecting-users)
+  - [Disconnecting Users](#disconnecting-users)
+  - [Revoking In-Flight Tokens](#revoking-in-flight-tokens)
 - [The Full Cycle](#the-full-cycle)
 - [Key Concepts](#key-concepts)
   - [Per-Request Scoping](#per-request-scoping)
   - [Force Inputs (Locked Parameters)](#force-inputs-locked-parameters)
   - [Scope Management](#scope-management)
+  - [Audit Logs](#audit-logs)
 - [Key Generation](#key-generation)
 - [Security Best Practices](#security-best-practices)
 - [API Reference](#api-reference)
@@ -398,6 +401,36 @@ class MyService(PermytClient):
 
 The broker considers disconnect best-effort: a 5xx from this handler does not block the broker-side teardown, but you should still surface real errors in your logs so you can reconcile drift.
 
+### Revoking In-Flight Tokens
+
+When a user disconnects or blacklists a peer service from their PERMYT app, the broker fans out an `action="token_revoke"` callback to every *other* connection on the same profile so each one can drop any locally stored tokens involving the blocked peer before they age out of their natural TTL. The disconnecting service itself does **not** receive this callback — it is expected to revoke its own tokens for the user inside `process_user_disconnect`.
+
+Implement `process_token_revoke` on any service that stores tokens issued to or by peer services. Routing happens automatically through `handle_inbound`.
+
+```python
+from permyt.typing import TokenRevokeRequest
+
+class MyService(PermytClient):
+    # ... other methods ...
+
+    def process_token_revoke(self, data: TokenRevokeRequest) -> dict:
+        permyt_user_id = data["permyt_user_id"]
+        blocked_service_id = data["blocked_service_id"]
+        blocked_service_public_key = data["blocked_service_public_key"]
+
+        # Idempotent — match on whichever identifier you persist in your token store
+        PermytToken.objects.filter(
+            user__permyt_id=permyt_user_id,
+        ).filter(
+            models.Q(service_id=blocked_service_id)
+            | models.Q(service_public_key=blocked_service_public_key)
+        ).update(used=True)
+
+        return {"revoked": True}
+```
+
+`reason` in the payload is informational ("disconnect" or "blacklist") — useful for audit logs but not required for the revocation itself. Token revoke is best-effort: a 5xx does not block the broker, but real errors should surface in your logs so you can reconcile drift.
+
 ## The Full Cycle
 
 Here is the complete request-access cycle, showing how requester, user, PERMYT, and provider interact:
@@ -526,6 +559,36 @@ print(result)  # {"created": 2, "updated": 0, "deleted": 0}
 - When new scopes are created, `ScopeConsent` records are automatically materialized for all existing user connections.
 - Deleting a scope (by omitting it from the list) cascades to remove related `ScopeConsent` and `GrantedScope` records.
 
+### Audit Logs
+
+`fetch_logs()` returns a paginated slice of the broker's audit log restricted to actions your service appears on as either requester or provider — request lifecycle, token issuance, consent changes, connection lifecycle, scope-catalog syncs, exchange tokens, etc.
+
+```python
+page = service.fetch_logs(limit=50, offset=0)
+
+for entry in page["logs"]:
+    print(entry["datetime"], entry["log_type"], entry["meta"])
+
+print(page["total"], "rows total")
+```
+
+**Parameters** (all optional):
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `limit` | int | `50` | Page size, 1-200 |
+| `offset` | int | `0` | Zero-based offset |
+| `user_id` | str | `None` | Restrict to one profile, identified by **your** `permyt_user_id` for that user (the same id surfaced on each row) |
+| `log_type` | `LogType` | `None` | One of `connected`, `disconnected`, `request`, `awaiting`, `accepted`, `rejected`, `incomplete`, `unavailable`, `issued`, `error`, `consent_changed`, `blacklist_changed`, `scopes_updated`, `credentials_rotated`, `service_closed`, `exchange_request`, `exchange_redeemed` |
+| `request_id` | str | `None` | Restrict to a single access-request lifecycle |
+| `days_back` | int | `None` | Restrict to entries within the last N days (1-365) |
+
+**Response shape**: `{logs: list[ActivityLog], total: int, limit: int, offset: int}` — `total` is the unsliced count for the same filter combination, suitable for driving a pager.
+
+**Per-row visibility**: the broker enforces visibility server-side. Your service only sees rows it appears on, and `meta` is stripped from `request` rows when you are the provider (request descriptions are the user's intent to the requester, not data the provider has any business seeing).
+
+**Transport**: unlike token bundles or service-call payloads, the audit log response is **not JWE-encrypted** — it travels in clear over the TLS link to PERMYT. The contents (timestamps, scope refs, request IDs, your own `permyt_user_id`s) can reveal user activity patterns, so treat `fetch_logs` output as PII when piping it into your own logs or downstream systems.
+
 ## Key Generation
 
 All services need ES256 (ECDSA P-256) key pairs.
@@ -651,6 +714,8 @@ The client provides:
 - **Requester methods** (`request_access`, `check_access`, `handle_approved_access`, `call_services`, `handle_request_status`, `process_request_status`, `request_token`, `redeem_token`) for requesting and consuming data
 - **Provider methods** (`handle_token_request`, `handle_service_call`) for issuing tokens and processing incoming requests
 - **Connect methods** (`generate_connect_token`, `handle_user_connect`, `handle_user_disconnect`) for linking user accounts via QR code, NFC, or OAuth button flows — and tearing those links down when the user revokes them
+- **Token revoke** (`handle_token_revoke`) for sibling services to drop in-flight tokens when a user disconnects or blacklists a peer in the same profile
+- **Audit logs** (`fetch_logs`) for pulling the calling service's paginated audit log from PERMYT
 
 ### Required Implementations
 
@@ -734,10 +799,26 @@ def process_user_disconnect(self, data: DisconnectRequest) -> dict[str, Any] | N
 
     Implementations should be idempotent: repeated calls for an
     already-disconnected user must succeed. Drop OAuth tokens, system auth
-    tokens, sessions, and unlink ``permyt_user_id`` from the local account.
+    tokens, sessions, any locally-issued PERMYT tokens for the user, and
+    unlink ``permyt_user_id`` from the local account.
 
     Raises:
         InvalidInputError: If permyt_user_id is missing
+    """
+
+def process_token_revoke(self, data: TokenRevokeRequest) -> dict[str, Any] | None:
+    """
+    Drop in-flight tokens involving a peer service that the user disconnected
+    or blacklisted in the same profile.
+
+    Match on whichever identifier you persist in your token store
+    (``blocked_service_id`` and/or ``blocked_service_public_key``) for the
+    given ``permyt_user_id``. The disconnecting service does NOT receive
+    this callback for its own user — that case is covered by
+    ``process_user_disconnect``.
+
+    Implementations must be idempotent: repeat revokes for already-invalidated
+    tokens or unknown users must not raise.
     """
 ```
 
@@ -840,7 +921,7 @@ def process_request(
 
 ### Error Handling
 
-The handler entry points (`handle_inbound`, `handle_token_request`, `handle_service_call`, `handle_user_connect`, `handle_user_disconnect`, `handle_request_status`) automatically catch and format errors. All PERMYT exceptions inherit from `PermytError`:
+The handler entry points (`handle_inbound`, `handle_token_request`, `handle_service_call`, `handle_user_connect`, `handle_user_disconnect`, `handle_token_revoke`, `handle_request_status`) automatically catch and format errors. All PERMYT exceptions inherit from `PermytError`:
 
 ```python
 from permyt.exceptions import (
@@ -894,6 +975,12 @@ from permyt.typing import (
     ConnectPayload,        # Connect payload generated by the service (QR code, NFC, or button)
     ConnectRequest,        # Decrypted connect request from PERMYT
     DisconnectRequest,     # Decrypted disconnect notification from PERMYT
+    TokenRevokeRequest,    # Decrypted sibling-fanout revoke notification from PERMYT
+
+    # Audit logs
+    LogType,               # Single log_type discriminator
+    ActivityLog,           # One audit log entry
+    FetchLogsResponse,     # Paginated envelope returned by fetch_logs()
 )
 ```
 

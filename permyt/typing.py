@@ -296,6 +296,34 @@ class DisconnectRequest(TypedDict):
     permyt_user_id: str  # The caller's PERMYT identity
 
 
+class TokenRevokeRequest(TypedDict):
+    """
+    Request from PERMYT to a service telling it to revoke any in-flight
+    tokens that involve a *blocked* peer service for a given user.
+
+    Fired by the broker when a user disconnects or blacklists another service
+    R in the same profile. Every other connected service receives this
+    callback so it can drop any tokens it issued to R or holds from R for
+    that user, without waiting for natural TTL expiry.
+
+    Note: the disconnecting/blacklisted service R itself does NOT receive
+    ``token_revoke`` — it is expected to revoke its own tokens for the user
+    inside ``process_user_disconnect`` (or as part of its own blacklist
+    handling).
+
+    Matching strategy: a recipient should invalidate every locally stored
+    token for ``permyt_user_id`` whose stored ``service_id`` matches
+    ``blocked_service_id`` OR whose stored ``service_public_key`` matches
+    ``blocked_service_public_key``. Both identifiers are supplied so the
+    recipient can pick whichever it already persists in its token store.
+    """
+
+    permyt_user_id: str  # Recipient's connection id for this user
+    blocked_service_id: str  # Broker-side UUID of the disconnected/blacklisted service
+    blocked_service_public_key: str  # Public key of the disconnected/blacklisted service
+    reason: str  # "user_disconnect" | "user_blacklist"
+
+
 # -----------------------------------------------------------------------------
 # Consent mode values (mirrors broker's ConsentMode TextChoices)
 # -----------------------------------------------------------------------------
@@ -377,3 +405,81 @@ class ViewScopesResponse(TypedDict):
     """
 
     scopes: list[ServiceScopes]
+
+
+# -----------------------------------------------------------------------------
+# Data structures for fetching audit logs (service → PERMYT)
+# -----------------------------------------------------------------------------
+
+
+# Mirrors the broker's ``LogType`` TextChoices in
+# ``app/core/logs/settings.py``. The broker is the source of truth — when new
+# values are added there, mirror them here.
+LogType: TypeAlias = Literal[
+    "connected",
+    "disconnected",
+    "request",
+    "awaiting",
+    "accepted",
+    "rejected",
+    "incomplete",
+    "unavailable",
+    "issued",
+    "error",
+    "consent_changed",
+    "blacklist_changed",
+    "scopes_updated",
+    "credentials_rotated",
+    "service_closed",
+    "exchange_request",
+    "exchange_redeemed",
+]
+"""Discriminator for a single audit log entry. Mirrors the broker's ``LogType``."""
+
+
+class ActivityLog(TypedDict, total=False):
+    """
+    A single audit log entry returned by ``fetch_logs()``.
+
+    The calling service sees logs where it appears as either requester or
+    provider. ``permyt_user_id`` is the *recipient's* connection id for the
+    profile the log row refers to (resolved per-service by the broker), so
+    a service can correlate rows back to its own user records without ever
+    learning the broker-wide profile id.
+
+    ``meta`` is shape-by-``log_type``:
+    - ``request``: ``{"description_preview": str}`` (hidden when the viewer
+      is the provider — the field is dropped server-side).
+    - ``awaiting``: ``{"scope_refs": list[str], "reason": str | None}``.
+    - ``rejected`` / ``incomplete`` / ``unavailable``: ``{"reason": str}``.
+    - ``issued``: ``{"scope_refs": list[str], "expires_at": str}``.
+    - ``error``: ``{"stage": str, "reason": str}``.
+    - ``consent_changed``: ``{"kind": str, "scope_ref": str | None, ...}``.
+    - ``blacklist_changed``: ``{"kind": "added" | "removed", "reason"?: str}``.
+    - ``scopes_updated``: ``{"created": int, "updated": int, "deleted": int}``.
+    - ``exchange_request`` / ``exchange_redeemed``: ``{"target_service_id"?:
+      str, "redeemed_by"?: str}``.
+    """
+
+    id: str
+    datetime: str  # ISO 8601 format
+    log_type: LogType
+    request_id: str | None
+    requester_id: str | None
+    provider_id: str | None
+    permyt_user_id: str | None
+    meta: dict[str, Any]
+
+
+class FetchLogsResponse(TypedDict):
+    """
+    Paginated response from ``fetch_logs()``.
+
+    ``total`` is the unsliced count for the same filter combination — use it
+    to drive a pager. ``limit`` and ``offset`` echo the values applied.
+    """
+
+    logs: list[ActivityLog]
+    total: int
+    limit: int
+    offset: int

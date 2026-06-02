@@ -18,6 +18,7 @@ from permyt.typing import (
     ServiceCallEndpoint,
     TokenMetadata,
     TokenRequestData,
+    TokenRevokeRequest,
 )
 
 
@@ -131,6 +132,18 @@ class StubPermytClient(PermytClient):
         self._disconnected_users = getattr(self, "_disconnected_users", [])
         self._disconnected_users.append(data["permyt_user_id"])
         return {"disconnected": True}
+
+    def process_token_revoke(self, data: TokenRevokeRequest) -> dict[str, Any]:
+        self._revoked = getattr(self, "_revoked", [])
+        self._revoked.append(
+            {
+                "permyt_user_id": data["permyt_user_id"],
+                "blocked_service_id": data["blocked_service_id"],
+                "blocked_service_public_key": data["blocked_service_public_key"],
+                "reason": data["reason"],
+            }
+        )
+        return {"revoked": True}
 
 
 @pytest.fixture

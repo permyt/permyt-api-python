@@ -24,6 +24,7 @@ class InboundMixin:  # pylint: disable=too-few-public-methods
     - ``service_call``     — a requester calls a provider endpoint with a token
     - ``user_connect``     — PERMYT forwards a scanned QR-code login
     - ``user_disconnect``  — PERMYT notifies the service that a user revoked the link
+    - ``token_revoke``     — PERMYT notifies the service to drop in-flight tokens involving a peer
     - ``request_status``   — PERMYT notifies a requester of an access-request status change
     """
 
@@ -65,5 +66,6 @@ class InboundMixin:  # pylint: disable=too-few-public-methods
             "service_call": self.handle_service_call,
             "user_connect": self.handle_user_connect,
             "user_disconnect": self.handle_user_disconnect,
+            "token_revoke": self.handle_token_revoke,
             "request_status": self.handle_request_status,
         }.get(action)
