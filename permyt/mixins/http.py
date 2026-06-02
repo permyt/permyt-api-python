@@ -13,7 +13,7 @@ __all__ = ("HTTPClientMixin",)
 
 class HTTPClientMixin:  # pylint: disable=too-few-public-methods
     """
-    Mixin that handles low-level signed HTTP communication in the PERMYT protocol.
+    Mixin that handles low-level signed HTTP communication for PERMYT access requests.
 
     Every outgoing request is wrapped in a signed payload: the data is optionally
     JWE-encrypted for the recipient, and a proof-of-possession JWT is attached so
@@ -43,7 +43,7 @@ class HTTPClientMixin:  # pylint: disable=too-few-public-methods
 
         Args:
             url (str): Target endpoint URL.
-            action (str): Required protocol-level action discriminator
+            action (str): Required action discriminator on the outer envelope
                 (e.g. ``"access_request"``, ``"token_request"``, ``"service_call"``).
             data (dict[str, Any]): Data to include in the payload.
             recipient_public_key (str): Recipient's PEM public key. The data will be JWE-encrypted

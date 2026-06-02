@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-06-02
+
+### Added
+- `TokenRevokeMixin` with `handle_token_revoke` and abstract
+  `process_token_revoke` for the sibling fan-out the broker fires at every
+  *other* connection on a profile when a user disconnects or blacklists a
+  peer service, so each recipient can drop in-flight tokens involving the
+  blocked peer before they age out.
+- `TokenRevokeRequest` TypedDict (`permyt_user_id`, `blocked_service_id`,
+  `blocked_service_public_key`, `reason`).
+- `handle_inbound` now routes `action="token_revoke"` to the new handler.
+- `LogsMixin.fetch_logs(limit, offset, user_id, log_type, request_id,
+  days_back)` for pulling the calling service's paginated audit log from
+  PERMYT (`POST /request/logs/`). Returns `{logs, total, limit, offset}` —
+  visibility and per-row `meta` sanitisation are enforced server-side.
+- `ActivityLog`, `FetchLogsResponse`, and `LogType` type definitions.
+
+### Changed
+- `process_user_disconnect` contract clarified: the disconnecting service is
+  responsible for revoking its own PERMYT-issued tokens for the user. The
+  broker does NOT send a separate `token_revoke` to the disconnecting service.
+
 ## [0.1.5] - 2026-05-06
 
 ### Added

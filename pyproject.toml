@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "permyt"
 dynamic = ["version"]
-description = "User-controlled authorization protocol for service-to-service data access"
+description = "User-controlled access requests for service-to-service data exchange"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

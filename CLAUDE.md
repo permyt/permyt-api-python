@@ -36,11 +36,11 @@ Code style: **100-character line length** (enforced by ruff).
 - [mixins/encryption.py](permyt/mixins/encryption.py) — ES256 JWT signing, JWE encryption/decryption (ECDH-ES+A256KW + A256GCM), proof-of-possession tokens
 - [mixins/http.py](permyt/mixins/http.py) — HTTP client with signed requests, nonce + ISO timestamp for replay attack prevention
 - [mixins/errors.py](permyt/mixins/errors.py) — Exception-to-HTTP-response conversion
-- [mixins/requests/requester.py](permyt/mixins/requests/requester.py) — Access requests, exchange token redeeming, calling providers, scope discovery (`view_scopes`)
-- [mixins/requests/provider.py](permyt/mixins/requests/provider.py) — Token issuance, service call handling, token validation
-- [mixins/requests/connect.py](permyt/mixins/requests/connect.py) — connect payload generation (QR code, NFC, or button), user login/account linking flows
-- [mixins/requests/disconnect.py](permyt/mixins/requests/disconnect.py) — `UserDisconnectMixin`: handles the broker's `action="user_disconnect"` webhook so providers drop OAuth tokens / sessions when a user revokes the connection
-- [mixins/requests/scopes.py](permyt/mixins/requests/scopes.py) — `ScopeManagementMixin`: pushes the service's complete scope list to PERMYT via `update_scopes`
+- [mixins/requests/requester.py](permyt/mixins/requests/requester.py) — `RequesterMixin`: access requests, exchange token redeeming, calling providers, scope discovery (`view_scopes`)
+- [mixins/requests/provider.py](permyt/mixins/requests/provider.py) — `ProviderMixin`: token issuance, service-call handling, token validation, **and** `handle_token_revoke` / `process_token_revoke` (drop stored tokens involving a blocked peer — lives here because only providers persist token state)
+- [mixins/requests/connect.py](permyt/mixins/requests/connect.py) — `UserConnectMixin`: QR/NFC/button connect payload + user login/account linking, **and** `handle_user_disconnect` / `process_user_disconnect` (handle user revoking the link)
+- [mixins/requests/scopes.py](permyt/mixins/requests/scopes.py) — `ScopeManagementMixin`: push scope catalog to PERMYT
+- [mixins/requests/logs.py](permyt/mixins/requests/logs.py) — `LogsMixin`: fetch the calling service's paginated audit log from PERMYT
 - [mixins/requests/webhook.py](permyt/mixins/requests/webhook.py) — `InboundMixin`: single-endpoint dispatcher (`handle_inbound`) that routes by `action` field to the right handler
 
 ### Abstract Methods Pattern
@@ -74,7 +74,12 @@ process_request(metadata, data) -> dict  # MUST enforce force inputs in metadata
 **Connect capability additionally requires:**
 ```python
 process_user_connect(data: ConnectRequest) -> dict
-process_user_disconnect(data: DisconnectRequest) -> dict  # idempotent local cleanup
+process_user_disconnect(data: DisconnectRequest) -> dict  # idempotent local cleanup; MUST revoke own tokens for the user
+```
+
+**Token revoke capability** (any service that holds tokens for peer services should implement):
+```python
+process_token_revoke(data: TokenRevokeRequest) -> dict  # idempotent; drop tokens matching blocked_service_id / blocked_service_public_key
 ```
 
 ### Security Model (SDK-specific)
@@ -146,6 +151,10 @@ Links a Service to a User Profile via QR code. Creates the `ServiceConnection` a
 
 When a user revokes a previously-linked service from their PERMYT app, the broker tears down its own state and notifies the service so it can drop OAuth tokens, sessions, or whatever local link the connect flow established. The service response is best-effort — the broker does not block on it.
 
+Before notifying the disconnecting service, the broker also fans out a separate `token_revoke` callback to every *other* service the user is connected to in the same profile, so they can drop any in-flight tokens that involve the disconnecting service without waiting for natural TTL expiry. The disconnecting service R itself does NOT receive `token_revoke` — it is expected to revoke its own tokens for the user as part of `process_user_disconnect`.
+
+The same sibling fan-out fires when a user *blacklists* a service rather than disconnecting it (the broker creates a `BlackList` row on the profile).
+
 ```
   Mobile App                     Broker                          Service
       │                            │                                │
@@ -155,12 +164,19 @@ When a user revokes a previously-linked service from their PERMYT app, the broke
       │              2. Reject AWAITING requests + REJECTED callback │
       │                 Emit per-grant REVOKED audit logs            │
       │                            │                                │
+      │                            │  2.5. Sibling fan-out:
+      │                            │       action=token_revoke
+      │                            │       → every OTHER connection on the profile
+      │                            │       {permyt_user_id, blocked_service_id,
+      │                            │        blocked_service_public_key, reason}
+      │                            │                                │
       │                            │  3. Inbound: action=user_disconnect
       │                            │  {permyt_user_id}              │
       │                            │───────────────────────────────►│
       │                            │                                │
       │                            │            4. process_user_disconnect()
       │                            │               Revoke local credentials
+      │                            │               Revoke own in-flight tokens
       │                            │               Unlink permyt_user_id
       │                            │◄───────────────────────────────│
       │                            │                                │
@@ -291,6 +307,7 @@ All service-to-Broker and Broker-to-service communication uses **ES256 signing**
 - **`ConnectPayload`**: `{service_id, payload: EncryptedPayload, proof}` — connect flow payload (QR/NFC/button)
 - **`ConnectRequest`**: `{token, permyt_user_id}` — connect callback from PERMYT to service
 - **`DisconnectRequest`**: `{permyt_user_id}` — disconnect callback from PERMYT to service
+- **`TokenRevokeRequest`**: `{permyt_user_id, blocked_service_id, blocked_service_public_key, reason}` — sibling-fan-out callback telling a service to drop in-flight tokens involving a peer that the user disconnected or blacklisted
 - **`ConsentMode`**: `Literal["auto_grant", "prompt_once", "prompt_always"]` — consent mode for scopes
 - **`ScopeInput`**: `{name, description}` — input field declaration for a scope
 - **`ScopeDefinition`**: `{reference, name, description?, inputs?, default_consent_mode?, high_sensitivity?}` — scope definition for `update_scopes()`
@@ -304,7 +321,8 @@ This SDK provides the cryptographic and protocol layer for both Requesters and P
 
 - **Inbound dispatcher**: `InboundMixin` implements `handle_inbound()` — single-endpoint dispatcher that routes by `action` field to the right handler
 - **Connect cycle**: `UserConnectMixin` implements `generate_connect_token()` (step 1) and `handle_user_connect()` / `process_user_connect()` (step 6)
-- **Disconnect cycle**: `UserDisconnectMixin` implements `handle_user_disconnect()` / `process_user_disconnect()` — fired by the broker when a user revokes a connection from their PERMYT app. Implementors should drop OAuth tokens, sessions, and any local link keyed by `permyt_user_id`. Idempotent.
+- **Disconnect cycle**: `UserConnectMixin` also implements `handle_user_disconnect()` / `process_user_disconnect()` — fired by the broker when a user revokes a connection from their PERMYT app. Implementors should drop OAuth tokens, sessions, **any locally-issued PERMYT tokens for the user**, and any local link keyed by `permyt_user_id`. Idempotent. The broker does NOT send a separate `token_revoke` to the disconnecting service for its own user — disconnect implies revocation.
+- **Token revoke**: `ProviderMixin` also implements `handle_token_revoke()` / `process_token_revoke()` — fired by the broker at every *other* connection on the profile when a user disconnects or blacklists a peer service. Implementors should invalidate any locally stored tokens whose `service_id` or `service_public_key` matches the blocked peer for the affected user. Idempotent. Lives on the provider mixin because only providers persist token state via `store_token`; requesters consume single-use tokens and have nothing to drop.
 - **Request cycle (Requester)**: `RequesterMixin` implements `request_access()` (step 1), `check_access()` (step 8), `handle_approved_access()` (step 8), `call_services()` (step 9), `handle_request_status()` / `process_request_status()` (status callbacks), `request_token()` / `redeem_token()` (exchange tokens), `view_scopes()` (enumerate providers and their scopes available to a connected user)
 - **Request cycle (Provider)**: `ProviderMixin` implements `handle_token_request()` (step 7) and `handle_service_call()` (step 10)
 - **Scope management**: `ScopeManagementMixin` implements `update_scopes()` — pushes the complete scope list to PERMYT, which diffs by `reference` to create/update/delete

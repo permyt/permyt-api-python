@@ -5,11 +5,11 @@ from .mixins.errors import ErrorsMixin
 from .mixins.http import HTTPClientMixin
 from .mixins.requests import (
     InboundMixin,
+    LogsMixin,
     ProviderMixin,
     RequesterMixin,
     ScopeManagementMixin,
     UserConnectMixin,
-    UserDisconnectMixin,
 )
 
 __all__ = ("PermytClient",)
@@ -23,17 +23,17 @@ class PermytClient(
     RequesterMixin,
     ProviderMixin,
     UserConnectMixin,
-    UserDisconnectMixin,
     ScopeManagementMixin,
+    LogsMixin,
     InboundMixin,
 ):
     """
-    Abstract base class for participating in the PERMYT protocol.
+    Abstract base class for handling PERMYT access requests.
 
     A service may act as a requester (asking for data), a provider (responding
     with data), or both. This class combines all the necessary machinery for
     either role: cryptographic signing and verification (ES256/JWE), HTTP
-    transport, and the full PERMYT request lifecycle.
+    transport, and the full PERMYT access-request lifecycle.
 
     All subclasses must implement:
         - get_private_key()               — PEM string or file path
@@ -50,10 +50,11 @@ class PermytClient(
         - get_token_metadata()          — retrieve and validate token
         - get_endpoints_for_scope()     — map scope to endpoints
         - process_request()             — handle validated request
+        - process_token_revoke()        — drop stored tokens involving a blocked peer
 
     Connect capability (implement if supporting user linking):
-        - process_user_connect()         — handle user login/linking
-        - process_user_disconnect()      — handle user revoking the link
+        - process_user_connect()        — handle user login/linking
+        - process_user_disconnect()     — handle user revoking the link
     """
 
     def __init__(self, host: str | None = None):

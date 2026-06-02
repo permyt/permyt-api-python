@@ -1,5 +1,5 @@
 """
-PERMYT Protocol Exceptions
+PERMYT Exceptions
 """
 
 
@@ -7,7 +7,7 @@ class PermytError(Exception):
     """Base exception for all PERMYT-related errors."""
 
     code = "permyt_error"
-    default_message = "An error occurred in the PERMYT protocol."
+    default_message = "An error occurred while handling a PERMYT access request."
 
     def __init__(self, message: str | None = None, extra_info: str | None = None):
         super().__init__(message or self.default_message)

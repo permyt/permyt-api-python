@@ -4,9 +4,20 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from permyt.exceptions import PermytError, UnexpectedError
-from permyt.typing import ConnectPayload, ConnectRequest, EncryptedPayload, EncryptedRequest
+from permyt.typing import (
+    ConnectPayload,
+    ConnectRequest,
+    DisconnectRequest,
+    EncryptedPayload,
+    EncryptedRequest,
+)
 
 __all__ = ("UserConnectMixin",)
+
+
+# =============================================================================
+# Connect — link a user's account to PERMYT via QR code, NFC, or button
+# =============================================================================
 
 
 class UserConnectMixin:  # pylint: disable=too-few-public-methods
@@ -180,3 +191,74 @@ class UserConnectMixin:  # pylint: disable=too-few-public-methods
             InvalidInputError: If the request payload is invalid or missing required fields.
         """
         raise NotImplementedError("Connect capability: implement process_user_connect()")
+
+    # -------------------------------------------------------------------------
+    # Handle this service disconnect from user's profile
+    # -------------------------------------------------------------------------
+
+    def handle_user_disconnect(self, request: EncryptedRequest) -> dict[str, Any]:
+        """
+        Handle a user disconnect notification forwarded by PERMYT.
+
+        Called by PERMYT after a user disconnects this service from their
+        profile via the mobile app. PERMYT encrypts and signs the request
+        before calling this endpoint.
+
+        The service:
+            1. Verifies PERMYT's proof and validates the request signature.
+            2. Validates the timestamp and nonce (replay protection).
+            3. Decrypts the disconnect payload.
+            4. Dispatches to process_user_disconnect() to revoke local state.
+
+        Args:
+            request (EncryptedRequest): Encrypted and signed disconnect request from PERMYT.
+
+        Returns:
+            dict[str, Any]: Response forwarded back to PERMYT (typically empty).
+        """
+        try:
+            permyt_public_key = self.get_permyt_public_key()
+            payload = request["payload"]
+
+            self._verify_proof(request["proof"], payload, permyt_public_key)
+            self._validate_nonce_and_timestamp(payload["nonce"], payload["timestamp"])
+
+            data: DisconnectRequest = self._decrypt_data(payload["data"])
+
+            return self.process_user_disconnect(data) or {}
+
+        except PermytError as exc:
+            return self.handle_permyt_error(exc)
+
+        except Exception as exc:  # pylint: disable=broad-except
+            logging.error(f"Unexpected error in handle_user_disconnect: {exc}", exc_info=True)
+            return self.handle_permyt_error(UnexpectedError(extra_info=str(exc)))
+
+    def process_user_disconnect(self, data: DisconnectRequest) -> dict[str, Any] | None:
+        """
+        Process a user disconnect notification, applying service-specific cleanup.
+
+        All cryptographic validation has passed at this point. The
+        ``data["permyt_user_id"]`` identifies the PERMYT user who disconnected.
+
+        Implementations should:
+            - Revoke any stored OAuth refresh tokens / API keys held for the user.
+            - Invalidate every PERMYT-issued token the service is still
+              holding for this ``permyt_user_id``. The broker does NOT send a
+              separate ``token_revoke`` to the disconnecting service for its
+              own user — disconnect implies revocation of the service's own
+              in-flight tokens for that user.
+            - Clear any cached session state keyed by ``permyt_user_id``.
+            - Detach the ``permyt_user_id`` from the local account record (or
+              tombstone it for audit purposes).
+            - Be idempotent: repeat calls for an already-disconnected user
+              should not raise.
+
+        Args:
+            data (DisconnectRequest): Validated disconnect payload containing
+                the caller's PERMYT ``permyt_user_id``.
+
+        Returns:
+            dict[str, Any] | None: Optional response payload sent back to PERMYT.
+        """
+        raise NotImplementedError("Disconnect capability: implement process_user_disconnect()")

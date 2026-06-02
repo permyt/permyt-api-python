@@ -15,7 +15,7 @@ from permyt.typing import EncryptedRequest
 
 class EncryptionMixin:  # pylint: disable=too-few-public-methods
     """
-    Mixin that handles all cryptographic operations in the PERMYT protocol:
+    Mixin that handles all cryptographic operations for PERMYT access requests:
     key loading, JWT signing, JWE encryption/decryption, and proof-of-possession
     creation and verification.
     """

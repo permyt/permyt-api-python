@@ -11,6 +11,7 @@ from permyt.typing import (
     ServiceCallRequest,
     TokenMetadata,
     TokenRequestData,
+    TokenRevokeRequest,
 )
 
 __all__ = ("ProviderMixin",)
@@ -346,3 +347,85 @@ class ProviderMixin:  # pylint: disable=too-few-public-methods
                 ``metadata["scope"]``.
         """
         raise NotImplementedError("Provider role: implement process_request()")
+
+    # -------------------------------------------------------------------------
+    # Handle peer revocation — drop stored tokens involving a blocked peer
+    # -------------------------------------------------------------------------
+
+    def handle_token_revoke(self, request: EncryptedRequest) -> dict[str, Any]:
+        """
+        Handle a token revocation notification forwarded by PERMYT.
+
+        Called by PERMYT after a user disconnects or blacklists a peer service
+        in the same profile. PERMYT fans the callback out to every *other*
+        connection on the profile so each one can drop stored tokens involving
+        the blocked peer before they age out of their natural TTL. The
+        disconnecting/blacklisted service itself does NOT receive this — it
+        revokes its own tokens inside ``process_user_disconnect``.
+
+        Only providers persist token state (via ``store_token``); requesters
+        consume single-use tokens immediately and have nothing to drop, so
+        the handler lives with the provider mixin.
+
+        The service:
+            1. Verifies PERMYT's proof and validates the request signature.
+            2. Validates the timestamp and nonce (replay protection).
+            3. Decrypts the revoke payload.
+            4. Dispatches to process_token_revoke() to invalidate matching tokens.
+
+        Args:
+            request (EncryptedRequest): Encrypted and signed revoke request from PERMYT.
+
+        Returns:
+            dict[str, Any]: Response forwarded back to PERMYT (typically empty).
+        """
+        try:
+            permyt_public_key = self.get_permyt_public_key()
+            payload = request["payload"]
+
+            self._verify_proof(request["proof"], payload, permyt_public_key)
+            self._validate_nonce_and_timestamp(payload["nonce"], payload["timestamp"])
+
+            data: TokenRevokeRequest = self._decrypt_data(payload["data"])
+
+            return self.process_token_revoke(data) or {}
+
+        except PermytError as exc:
+            return self.handle_permyt_error(exc)
+
+        except Exception as exc:  # pylint: disable=broad-except
+            logging.error(f"Unexpected error in handle_token_revoke: {exc}", exc_info=True)
+            return self.handle_permyt_error(UnexpectedError(extra_info=str(exc)))
+
+    def process_token_revoke(self, data: TokenRevokeRequest) -> dict[str, Any] | None:
+        """
+        Process a token revocation notification, applying service-specific cleanup.
+
+        All cryptographic validation has passed at this point. The payload
+        identifies the affected user (``permyt_user_id``) and the blocked
+        peer service by both broker UUID (``blocked_service_id``) and public
+        key (``blocked_service_public_key``).
+
+        Best-effort from PERMYT's perspective — the broker does not block on
+        the response, so a 5xx here will not block the user. The broker also
+        fans this callback out to every connection on the profile without
+        knowing whether each recipient actually persists token state, so the
+        default is a silent no-op: requester-only services (no
+        ``store_token`` implementation) need do nothing.
+
+        Providers should override to:
+            - Invalidate every locally stored token for ``permyt_user_id``
+              whose stored ``service_id`` matches ``blocked_service_id`` OR
+              whose stored ``service_public_key`` matches
+              ``blocked_service_public_key`` — whichever identifier the
+              implementation already persists in its token store.
+            - Be idempotent: repeat calls for already-revoked or unknown
+              tokens / users should not raise.
+
+        Args:
+            data (TokenRevokeRequest): Validated revoke payload.
+
+        Returns:
+            dict[str, Any] | None: Optional response payload sent back to PERMYT.
+        """
+        return {}
